@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>旅のしおり - Travel Planner</title>
+  <meta name="description" content="旅行の予定を簡単に管理できるアプリ。Googleアカウントでログインしてどのデバイスからでもアクセス可能。">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  
+  <style>
+    @media print {
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    // ⚠️ Firebase設定（Firebase Consoleで取得してください）
+    // 詳しい手順は FIREBASE_SETUP.md を参照
+    // https://console.firebase.google.com/
+    const firebaseConfig = {
+      apiKey: "AIzaSyAg9IVqc9hTTXdLCIjbU21gEqIFYrCzuXA",
+      authDomain: "travel-planner-af8bd.firebaseapp.com",
+      projectId: "travel-planner-af8bd",
+      storageBucket: "travel-planner-af8bd.firebasestorage.app",
+      messagingSenderId: "914257292518",
+      appId: "1:914257292518:web:01890d8a23e3386a931f27"
+    };
+
+    // Firebase初期化
+    try {
+      firebase.initializeApp(firebaseConfig);
+      window.auth = firebase.auth();
+      window.db = firebase.firestore();
+      console.log('Firebase initialized successfully');
+    } catch (error) {
+      console.error('Firebase initialization error:', error);
+      alert('Firebase設定エラー: firebaseConfigを正しく設定してください');
+    }
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    
+    // アイコンコンポーネント
+    const Calendar = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>
+    );
+    const Plane = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"></path>
+      </svg>
+    );
+    const Train = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+        <path d="M4 11h16"></path>
+        <path d="M12 4v7"></path>
+        <path d="m8 20-2 2"></path>
+        <path d="m16 20 2 2"></path>
+      </svg>
+    );
+    const Hotel = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 21h18"></path>
+        <path d="M9 8h1"></path>
+        <path d="M9 12h1"></path>
+        <path d="M9 16h1"></path>
+        <path d="M14 8h1"></path>
+        <path d="M14 12h1"></path>
+        <path d="M14 16h1"></path>
+        <path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path>
+      </svg>
+    );
+    const Plus = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+    );
+    const X = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    );
+    const ChevronRight = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    );
+    const ChevronLeft = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    );
+    const MapPin = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+        <circle cx="12" cy="10" r="3"></circle>
+      </svg>
+    );
+    const Edit = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+      </svg>
+    );
+    const GripVertical = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="12" r="1"></circle>
+        <circle cx="9" cy="5" r="1"></circle>
+        <circle cx="9" cy="19" r="1"></circle>
+        <circle cx="15" cy="12" r="1"></circle>
+        <circle cx="15" cy="5" r="1"></circle>
+        <circle cx="15" cy="19" r="1"></circle>
+      </svg>
+    );
+    const LogOut = (props) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+    );
+
+    // ログイン・認証コンポーネント
+    function App() {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        const unsubscribe = window.auth.onAuthStateChanged((user) => {
+          setUser(user);
+          setLoading(false);
+        });
+        return unsubscribe;
+      }, []);
+
+      const signInWithGoogle = async () => {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        try {
+          await window.auth.signInWithPopup(provider);
+        } catch (error) {
+          console.error('ログインエラー:', error);
+          alert('ログインに失敗しました。もう一度お試しください。');
+        }
+      };
+
+      const signOut = async () => {
+        try {
+          await window.auth.signOut();
+        } catch (error) {
+          console.error('ログアウトエラー:', error);
+        }
+      };
+
+      if (loading) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-4xl mb-4">✈️</div>
+              <div className="text-gray-600">読み込み中...</div>
+            </div>
+          </div>
+        );
+      }
+
+      if (!user) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
+              <div className="text-6xl mb-6">✈️</div>
+              <h1 className="text-3xl font-bold text-gray-800 mb-4">旅のしおり</h1>
+              <p className="text-gray-600 mb-8">
+                Googleアカウントでログインして<br />
+                どのデバイスからでも旅行を管理
+              </p>
+              <button
+                onClick={signInWithGoogle}
+                className="w-full bg-white border-2 border-gray-300 text-gray-700 rounded-lg py-3 px-4 font-semibold hover:bg-gray-50 transition flex items-center justify-center gap-3"
+              >
+                <svg className="w-6 h-6" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Googleでログイン
+              </button>
+              <p className="text-xs text-gray-500 mt-6">
+                ログインすることで、利用規約に同意したものとみなされます
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      return <TravelApp user={user} onSignOut={signOut} />;
+    }
+
+    function TravelApp({ user, onSignOut }) {
+      const [travels, setTravels] = useState([]);
+      const [selectedTravel, setSelectedTravel] = useState(null);
+      const [showAddTravel, setShowAddTravel] = useState(false);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        if (!user) return;
+
+        // Firestoreからリアルタイムでデータ取得
+        const unsubscribe = window.db
+          .collection('users')
+          .doc(user.uid)
+          .collection('travels')
+          .onSnapshot((snapshot) => {
+            const travelsData = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            setTravels(travelsData);
+            setLoading(false);
+          }, (error) => {
+            console.error('データ取得エラー:', error);
+            setLoading(false);
+          });
+
+        return unsubscribe;
+      }, [user]);
+
+      const addTravel = async (travel) => {
+        try {
+          const docRef = await window.db.collection('users').doc(user.uid).collection('travels').add({
+            ...travel,
+            items: [],
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          setShowAddTravel(false);
+        } catch (error) {
+          console.error('追加エラー:', error);
+          alert('旅行の追加に失敗しました');
+        }
+      };
+
+      const updateTravel = async (updatedTravel) => {
+        try {
+          const { id, ...data } = updatedTravel;
+          await window.db.collection('users').doc(user.uid).collection('travels').doc(id).update(data);
+          setSelectedTravel(updatedTravel);
+        } catch (error) {
+          console.error('更新エラー:', error);
+          alert('更新に失敗しました');
+        }
+      };
+
+      const deleteTravel = async (id) => {
+        if (confirm('この旅行を削除しますか？')) {
+          try {
+            await window.db.collection('users').doc(user.uid).collection('travels').doc(id).delete();
+          } catch (error) {
+            console.error('削除エラー:', error);
+            alert('削除に失敗しました');
+          }
+        }
+      };
+
+      const sortedTravels = [...travels].sort((a, b) => 
+        new Date(a.startDate) - new Date(b.startDate)
+      );
+
+      if (selectedTravel) {
+        return (
+          <TravelDetail 
+            travel={selectedTravel}
+            user={user}
+            onBack={() => setSelectedTravel(null)}
+            onUpdate={updateTravel}
+            onSignOut={onSignOut}
+          />
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+          <div className="max-w-2xl mx-auto p-4">
+            <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-800 mb-2">✈️ 旅のしおり</h1>
+                  <p className="text-gray-600">旅行を整理して、快適な旅を</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <img 
+                    src={user.photoURL || 'https://via.placeholder.com/40'} 
+                    alt={user.displayName || 'User'}
+                    className="w-10 h-10 rounded-full"
+                  />
+                  <button
+                    onClick={onSignOut}
+                    className="text-gray-500 hover:text-gray-700 transition"
+                    title="ログアウト"
+                  >
+                    <LogOut size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAddTravel(true)}
+              className="w-full bg-indigo-600 text-white rounded-xl py-4 mb-6 font-semibold shadow-lg hover:bg-indigo-700 transition flex items-center justify-center gap-2"
+            >
+              <Plus size={24} />
+              新しい旅行を追加
+            </button>
+
+            {loading ? (
+              <div className="bg-white rounded-xl p-8 text-center text-gray-500">
+                読み込み中...
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sortedTravels.length === 0 ? (
+                  <div className="bg-white rounded-xl p-8 text-center text-gray-500">
+                    旅行がまだありません<br />
+                  上のボタンから追加してください
+                </div>
+              ) : (
+                sortedTravels.map(travel => (
+                  <TravelCard 
+                    key={travel.id}
+                    travel={travel}
+                    onClick={() => setSelectedTravel(travel)}
+                    onDelete={deleteTravel}
+                  />
+                ))
+              )}
+              </div>
+            )}
+
+            {showAddTravel && (
+              <AddTravelModal 
+                onClose={() => setShowAddTravel(false)}
+                onAdd={addTravel}
+              />
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function TravelCard({ travel, onClick, onDelete }) {
+      const formatDateRange = (start, end) => {
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        return `${startDate.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' })} - ${endDate.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' })}`;
+      };
+
+      return (
+        <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition cursor-pointer">
+          <div className="p-5" onClick={onClick}>
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="font-bold text-xl text-gray-800 mb-1">{travel.name}</h3>
+                <div className="text-sm text-gray-600">📍 {travel.destination}</div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(travel.id);
+                }}
+                className="text-gray-400 hover:text-red-500 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Calendar size={16} />
+              {formatDateRange(travel.startDate, travel.endDate)}
+            </div>
+            <div className="mt-3 text-sm text-gray-500">
+              {travel.items?.length || 0}件の予定
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AddTravelModal({ onClose, onAdd }) {
+      const [formData, setFormData] = useState({
+        name: '',
+        destination: '',
+        startDate: '',
+        endDate: ''
+      });
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!formData.name || !formData.destination || !formData.startDate || !formData.endDate) {
+          alert('すべての項目を入力してください');
+          return;
+        }
+        onAdd(formData);
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">新しい旅行</h2>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    旅行名 *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="例: 東京出張、札幌旅行"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    行き先 *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.destination}
+                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="例: 東京、札幌"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      開始日 *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      終了日 *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.endDate}
+                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-indigo-600 text-white rounded-lg py-3 font-semibold hover:bg-indigo-700 transition"
+                >
+                  追加
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function TravelDetail({ travel, onBack, onUpdate }) {
+      const [items, setItems] = useState(travel.items || []);
+      const [showAddItem, setShowAddItem] = useState(false);
+      const [editingItem, setEditingItem] = useState(null);
+      const [selectedQR, setSelectedQR] = useState(null);
+      const [draggedIndex, setDraggedIndex] = useState(null);
+
+      useEffect(() => {
+        setItems(travel.items || []);
+      }, [travel]);
+
+      const saveItems = (newItems) => {
+        setItems(newItems);
+        onUpdate({ ...travel, items: newItems });
+      };
+
+      const addItem = (item) => {
+        const newItems = [...items, { ...item, id: Date.now() }];
+        saveItems(newItems);
+        setShowAddItem(false);
+      };
+
+      const updateItem = (updatedItem) => {
+        const newItems = items.map(item => 
+          item.id === updatedItem.id ? updatedItem : item
+        );
+        saveItems(newItems);
+        setEditingItem(null);
+      };
+
+      const deleteItem = (id) => {
+        if (confirm('この予定を削除しますか？')) {
+          saveItems(items.filter(item => item.id !== id));
+        }
+      };
+
+      const handleDragStart = (index) => {
+        setDraggedIndex(index);
+      };
+
+      const handleDragOver = (e, index) => {
+        e.preventDefault();
+        if (draggedIndex === null || draggedIndex === index) return;
+
+        const newItems = [...items];
+        const draggedItem = newItems[draggedIndex];
+        newItems.splice(draggedIndex, 1);
+        newItems.splice(index, 0, draggedItem);
+        
+        setItems(newItems);
+        setDraggedIndex(index);
+      };
+
+      const handleDragEnd = () => {
+        saveItems(items);
+        setDraggedIndex(null);
+      };
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+          <div className="max-w-2xl mx-auto p-4">
+            <button
+              onClick={onBack}
+              className="mb-4 flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-semibold no-print"
+            >
+              <ChevronLeft size={20} />
+              旅行一覧に戻る
+            </button>
+
+            <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">{travel.name}</h1>
+              <div className="text-gray-600">📍 {travel.destination}</div>
+              <div className="text-sm text-gray-500 mt-2">
+                {new Date(travel.startDate).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' })} - 
+                {new Date(travel.endDate).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' })}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAddItem(true)}
+              className="w-full bg-indigo-600 text-white rounded-xl py-4 mb-6 font-semibold shadow-lg hover:bg-indigo-700 transition flex items-center justify-center gap-2 no-print"
+            >
+              <Plus size={24} />
+              予定を追加
+            </button>
+
+            <div className="space-y-4">
+              {items.length === 0 ? (
+                <div className="bg-white rounded-xl p-8 text-center text-gray-500">
+                  予定がまだありません<br />
+                  上のボタンから追加してください
+                </div>
+              ) : (
+                items.map((item, index) => (
+                  <ItemCard
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    onEdit={() => setEditingItem(item)}
+                    onDelete={() => deleteItem(item.id)}
+                    onQRClick={setSelectedQR}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDragEnd={handleDragEnd}
+                  />
+                ))
+              )}
+            </div>
+
+            {showAddItem && (
+              <ItemModal
+                travel={travel}
+                onClose={() => setShowAddItem(false)}
+                onSave={addItem}
+              />
+            )}
+
+            {editingItem && (
+              <ItemModal
+                travel={travel}
+                item={editingItem}
+                onClose={() => setEditingItem(null)}
+                onSave={updateItem}
+              />
+            )}
+
+            {selectedQR && (
+              <QRModal
+                imageData={selectedQR}
+                onClose={() => setSelectedQR(null)}
+              />
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function ItemCard({ item, index, onEdit, onDelete, onQRClick, onDragStart, onDragOver, onDragEnd }) {
+      const getIcon = () => {
+        switch(item.type) {
+          case 'flight': return <Plane className="text-blue-600" size={24} />;
+          case 'train': return <Train className="text-green-600" size={24} />;
+          case 'hotel': return <Hotel className="text-purple-600" size={24} />;
+          default: return <MapPin className="text-orange-600" size={24} />;
+        }
+      };
+
+      const getTypeLabel = () => {
+        switch(item.type) {
+          case 'flight': return '飛行機';
+          case 'train': return '電車';
+          case 'hotel': return 'ホテル';
+          default: return 'その他';
+        }
+      };
+
+      const formatDateTime = (datetime) => {
+        const date = new Date(datetime);
+        return date.toLocaleString('ja-JP', {
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      };
+
+      return (
+        <div
+          draggable
+          onDragStart={() => onDragStart(index)}
+          onDragOver={(e) => onDragOver(e, index)}
+          onDragEnd={onDragEnd}
+          className="bg-white rounded-xl shadow-md overflow-hidden cursor-move hover:shadow-lg transition"
+        >
+          <div className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="text-gray-400 cursor-grab active:cursor-grabbing mt-1 no-print">
+                <GripVertical size={20} />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    {getIcon()}
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">{getTypeLabel()}</div>
+                      <h3 className="font-bold text-lg text-gray-800">{item.title}</h3>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 no-print">
+                    <button
+                      onClick={onEdit}
+                      className="text-gray-400 hover:text-indigo-500 transition"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      onClick={onDelete}
+                      className="text-gray-400 hover:text-red-500 transition"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-sm text-gray-600 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} />
+                    出発: {formatDateTime(item.datetime)}
+                  </div>
+                </div>
+
+                {item.type === 'flight' && (
+                  <div className="space-y-2 text-sm">
+                    {item.airline && (
+                      <div className="text-gray-700">航空会社: <span className="font-semibold">{item.airline}</span></div>
+                    )}
+                    {item.flightNumber && (
+                      <div className="text-gray-700">便名: <span className="font-semibold">{item.flightNumber}</span></div>
+                    )}
+                    {(item.flightTimeStart || item.flightTimeEnd) && (
+                      <div className="text-gray-700">
+                        ⏰ {item.flightTimeStart || '--:--'}～{item.flightTimeEnd || '--:--'}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {item.type === 'train' && (
+                  <div className="space-y-2 text-sm">
+                    {(item.trainTimeStart || item.trainTimeEnd) && (
+                      <div className="text-gray-700">
+                        ⏰ {item.trainTimeStart || '--:--'}～{item.trainTimeEnd || '--:--'}
+                      </div>
+                    )}
+                    {item.trainLine && (
+                      <div className="text-gray-700">🚃 {item.trainLine}</div>
+                    )}
+                    {item.trainDestination && (
+                      <div className="text-gray-700">行き先: {item.trainDestination}</div>
+                    )}
+                    {item.trainPlatform && (
+                      <div className="text-gray-700">乗り場: <span className="font-semibold">{item.trainPlatform}</span></div>
+                    )}
+                  </div>
+                )}
+
+                {item.type === 'hotel' && (
+                  <div className="space-y-2 text-sm">
+                    {item.address && (
+                      <div className="text-gray-700">📍 {item.address}</div>
+                    )}
+                    {item.checkOut && (
+                      <div className="text-gray-700">
+                        チェックアウト: {new Date(item.checkOut).toLocaleString('ja-JP', {
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {item.type === 'other' && (
+                  <div className="space-y-2 text-sm">
+                    {item.destination && (
+                      <div className="text-gray-700">🎯 {item.destination}</div>
+                    )}
+                    {item.otherAddress && (
+                      <div className="text-gray-700">📍 {item.otherAddress}</div>
+                    )}
+                  </div>
+                )}
+
+                {item.notes && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700">
+                    {item.notes}
+                  </div>
+                )}
+
+                {item.attachments && item.attachments.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs font-semibold text-gray-600 mb-2">📎 予定情報</div>
+                    <div className="space-y-2">
+                      {item.attachments.map((file, index) => (
+                        <a
+                          key={index}
+                          href={file.data}
+                          download={file.name}
+                          className="block p-2 bg-blue-50 text-blue-700 rounded text-sm hover:bg-blue-100 transition"
+                        >
+                          📄 {file.name}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {item.receipts && item.receipts.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs font-semibold text-gray-600 mb-2">🧾 領収書</div>
+                    <div className="space-y-2">
+                      {item.receipts.map((file, index) => (
+                        <a
+                          key={index}
+                          href={file.data}
+                          download={file.name}
+                          className="block p-2 bg-green-50 text-green-700 rounded text-sm hover:bg-green-100 transition"
+                        >
+                          📄 {file.name}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {item.qrCode && (
+                  <button
+                    onClick={() => onQRClick(item.qrCode)}
+                    className="mt-3 w-full bg-indigo-50 text-indigo-700 rounded-lg py-3 font-semibold hover:bg-indigo-100 transition flex items-center justify-center gap-2 no-print"
+                  >
+                    QRコードを表示
+                    <ChevronRight size={20} />
+                  </button>
+                )}
+
+                {item.type === 'flight' && item.airline && (
+                  <a
+                    href={(() => {
+                      switch(item.airline) {
+                        case 'ANA': return 'https://www.ana.co.jp/fs/dom/jp/';
+                        case 'JAL': return 'https://www.jal.co.jp/jp/ja/dom/flight-status/';
+                        case 'ソラシドエア': return 'https://www.solaseedair.jp/flight_info/';
+                        case 'スカイマーク': return 'https://www.skymark.co.jp/ja/flight_info/';
+                        case 'ジェットスター': return 'https://www.jetstar.com/jp/ja/flight-status';
+                        case 'ピーチ': return 'https://www.flypeach.com/jp/ja-jp/flightinfo';
+                        default: return 'https://www.ana.co.jp/fs/dom/jp/';
+                      }
+                    })()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 block w-full bg-blue-50 text-blue-700 rounded-lg py-3 text-center font-semibold hover:bg-blue-100 transition no-print"
+                  >
+                    ✈️ 運航状況を確認
+                  </a>
+                )}
+
+                {item.type === 'train' && (
+                  <a
+                    href="https://transit.yahoo.co.jp/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 block w-full bg-red-50 text-red-700 rounded-lg py-3 text-center font-semibold hover:bg-red-100 transition no-print"
+                  >
+                    🔍 Yahoo!乗り換え案内で検索
+                  </a>
+                )}
+
+                {item.type === 'hotel' && item.address && (
+                  <>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 block w-full bg-green-50 text-green-700 rounded-lg py-3 text-center font-semibold hover:bg-green-100 transition no-print"
+                    >
+                      🗺️ Googleマップで見る
+                    </a>
+                    <a
+                      href={`https://www.jalan.net/uw/uwp0400/uww0401init.do?keyword=${encodeURIComponent(item.title)}&area=`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 block w-full bg-orange-50 text-orange-700 rounded-lg py-3 text-center font-semibold hover:bg-orange-100 transition no-print"
+                    >
+                      🏨 じゃらんで検索
+                    </a>
+                  </>
+                )}
+
+                {item.type === 'other' && (
+                  <>
+                    {item.customLink && (
+                      <a
+                        href={item.customLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 block w-full bg-purple-50 text-purple-700 rounded-lg py-3 text-center font-semibold hover:bg-purple-100 transition no-print"
+                      >
+                        🔗 リンクを開く
+                      </a>
+                    )}
+                    {item.otherAddress && (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.otherAddress)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 block w-full bg-green-50 text-green-700 rounded-lg py-3 text-center font-semibold hover:bg-green-100 transition no-print"
+                      >
+                        🗺️ Googleマップで見る
+                      </a>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ItemModal({ travel, item = null, onClose, onSave }) {
+      const [type, setType] = useState(item?.type || '');
+      
+      const getDefaultCheckOut = (datetime) => {
+        const date = new Date(datetime || travel.startDate + 'T15:00');
+        date.setDate(date.getDate() + 1);
+        date.setHours(10, 0, 0, 0);
+        return date.toISOString().slice(0, 16);
+      };
+
+      const [formData, setFormData] = useState(item || {
+        title: '',
+        datetime: travel.startDate + 'T09:00',
+        airline: '',
+        flightNumber: '',
+        flightTimeStart: '',
+        flightTimeEnd: '',
+        trainTimeStart: '',
+        trainTimeEnd: '',
+        trainLine: '',
+        trainDestination: '',
+        trainPlatform: '',
+        address: '',
+        checkOut: '',
+        destination: '',
+        otherAddress: '',
+        customLink: '',
+        notes: '',
+        qrCode: null,
+        attachments: [],
+        receipts: []
+      });
+
+      const handleImageUpload = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            setFormData({ ...formData, qrCode: event.target.result });
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+
+      const handleAttachmentsUpload = (e) => {
+        const files = Array.from(e.target.files);
+        const filePromises = files.map(file => {
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              resolve({
+                name: file.name,
+                data: event.target.result,
+                type: file.type
+              });
+            };
+            reader.readAsDataURL(file);
+          });
+        });
+
+        Promise.all(filePromises).then(newFiles => {
+          setFormData({ 
+            ...formData, 
+            attachments: [...(formData.attachments || []), ...newFiles]
+          });
+        });
+      };
+
+      const handleReceiptsUpload = (e) => {
+        const files = Array.from(e.target.files);
+        const filePromises = files.map(file => {
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              resolve({
+                name: file.name,
+                data: event.target.result,
+                type: file.type
+              });
+            };
+            reader.readAsDataURL(file);
+          });
+        });
+
+        Promise.all(filePromises).then(newFiles => {
+          setFormData({ 
+            ...formData, 
+            receipts: [...(formData.receipts || []), ...newFiles]
+          });
+        });
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!type || !formData.title || !formData.datetime) {
+          alert('種類、タイトル、出発時刻は必須です');
+          return;
+        }
+        if (type === 'flight' && !formData.airline) {
+          alert('航空会社を選択してください');
+          return;
+        }
+        onSave({ ...formData, type });
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {item ? '予定を編集' : '予定を追加'}
+                </h2>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {!type && !item ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setType('flight')}
+                      className="p-6 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition flex flex-col items-center gap-2"
+                    >
+                      <Plane size={32} className="text-blue-600" />
+                      <span className="font-semibold">飛行機</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setType('train')}
+                      className="p-6 border-2 border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition flex flex-col items-center gap-2"
+                    >
+                      <Train size={32} className="text-green-600" />
+                      <span className="font-semibold">電車</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setType('hotel')}
+                      className="p-6 border-2 border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition flex flex-col items-center gap-2"
+                    >
+                      <Hotel size={32} className="text-purple-600" />
+                      <span className="font-semibold">ホテル</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setType('other')}
+                      className="p-6 border-2 border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50 transition flex flex-col items-center gap-2"
+                    >
+                      <MapPin size={32} className="text-orange-600" />
+                      <span className="font-semibold">その他</span>
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {item && (
+                      <button
+                        type="button"
+                        onClick={() => setType('')}
+                        className="text-sm text-indigo-600 hover:text-indigo-800"
+                      >
+                        ← 種類を変更
+                      </button>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        タイトル *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        placeholder="例: 羽田空港 → 福岡空港"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        出発時刻 *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={formData.datetime}
+                        onChange={(e) => {
+                          const newDatetime = e.target.value;
+                          setFormData({ 
+                            ...formData, 
+                            datetime: newDatetime,
+                            checkOut: type === 'hotel' && !item ? getDefaultCheckOut(newDatetime) : formData.checkOut
+                          });
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {type === 'flight' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            航空会社 *
+                          </label>
+                          <select
+                            value={formData.airline}
+                            onChange={(e) => setFormData({ ...formData, airline: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          >
+                            <option value="">選択してください</option>
+                            <option value="ANA">ANA（全日空）</option>
+                            <option value="JAL">JAL（日本航空）</option>
+                            <option value="ソラシドエア">ソラシドエア</option>
+                            <option value="スカイマーク">スカイマーク</option>
+                            <option value="ジェットスター">ジェットスター</option>
+                            <option value="ピーチ">Peach</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            便名
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.flightNumber}
+                            onChange={(e) => setFormData({ ...formData, flightNumber: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="例: NH123"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              出発時刻
+                            </label>
+                            <input
+                              type="time"
+                              value={formData.flightTimeStart}
+                              onChange={(e) => setFormData({ ...formData, flightTimeStart: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              到着時刻
+                            </label>
+                            <input
+                              type="time"
+                              value={formData.flightTimeEnd}
+                              onChange={(e) => setFormData({ ...formData, flightTimeEnd: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            搭乗券QRコード
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                          {formData.qrCode && (
+                            <img src={formData.qrCode} alt="QR Preview" className="mt-2 w-32 h-32 object-contain border rounded" />
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {type === 'train' && (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              乗車時刻
+                            </label>
+                            <input
+                              type="time"
+                              value={formData.trainTimeStart}
+                              onChange={(e) => setFormData({ ...formData, trainTimeStart: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              到着時刻
+                            </label>
+                            <input
+                              type="time"
+                              value={formData.trainTimeEnd}
+                              onChange={(e) => setFormData({ ...formData, trainTimeEnd: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            路線
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.trainLine}
+                            onChange={(e) => setFormData({ ...formData, trainLine: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="例: 山手線"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            行き先
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.trainDestination}
+                            onChange={(e) => setFormData({ ...formData, trainDestination: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="例: 渋谷方面"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            乗り場
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.trainPlatform}
+                            onChange={(e) => setFormData({ ...formData, trainPlatform: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="例: 3番線"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {type === 'hotel' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            住所
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.address}
+                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="例: 東京都渋谷区..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            チェックアウト日時
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={formData.checkOut || getDefaultCheckOut(formData.datetime)}
+                            onChange={(e) => setFormData({ ...formData, checkOut: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {type === 'other' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            目的地
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.destination}
+                            onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="例: 東京スカイツリー"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            住所
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.otherAddress}
+                            onChange={(e) => setFormData({ ...formData, otherAddress: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="例: 東京都墨田区押上1-1-2"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            カスタムリンク（URL）
+                          </label>
+                          <input
+                            type="url"
+                            value={formData.customLink}
+                            onChange={(e) => setFormData({ ...formData, customLink: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="例: https://www.example.com"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        メモ
+                      </label>
+                      <textarea
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        rows="3"
+                        placeholder="注意事項や補足情報など"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        予定情報（画像・PDF）
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        multiple
+                        onChange={handleAttachmentsUpload}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                      {formData.attachments && formData.attachments.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          {formData.attachments.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <span className="text-sm text-gray-700">{file.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newAttachments = formData.attachments.filter((_, i) => i !== index);
+                                  setFormData({ ...formData, attachments: newAttachments });
+                                }}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        領収書（画像・PDF）
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        multiple
+                        onChange={handleReceiptsUpload}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                      {formData.receipts && formData.receipts.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          {formData.receipts.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <span className="text-sm text-gray-700">{file.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newReceipts = formData.receipts.filter((_, i) => i !== index);
+                                  setFormData({ ...formData, receipts: newReceipts });
+                                }}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-indigo-600 text-white rounded-lg py-3 font-semibold hover:bg-indigo-700 transition"
+                    >
+                      {item ? '保存' : '追加'}
+                    </button>
+                  </>
+                )}
+              </form>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function QRModal({ imageData, onClose }) {
+      return (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-50"
+          onClick={onClose}
+        >
+          <div className="max-w-4xl w-full">
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={onClose}
+                className="text-white bg-white bg-opacity-20 rounded-full p-2 hover:bg-opacity-30 transition"
+              >
+                <X size={32} />
+              </button>
+            </div>
+            <img
+              src={imageData}
+              alt="QR Code"
+              className="w-full h-auto bg-white rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <p className="text-white text-center mt-4 text-sm">画面をタップして閉じる</p>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
