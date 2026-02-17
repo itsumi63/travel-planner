@@ -14,6 +14,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <!-- Firebase Storage SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
   <!-- SheetJS (Excel出力用) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   
@@ -44,6 +46,7 @@
       firebase.initializeApp(firebaseConfig);
       window.auth = firebase.auth();
       window.db = firebase.firestore();
+      window.storage = firebase.storage();
       console.log('Firebase initialized successfully');
     } catch (error) {
       console.error('Firebase initialization error:', error);
@@ -979,8 +982,9 @@
                       {item.attachments.map((file, index) => (
                         <a
                           key={index}
-                          href={file.data}
-                          download={file.name}
+                          href={file.url || file.data}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="block p-2 bg-blue-50 text-blue-700 rounded text-sm hover:bg-blue-100 transition"
                         >
                           📄 {file.name}
@@ -997,11 +1001,12 @@
                       {item.receipts.map((file, index) => (
                         <a
                           key={index}
-                          href={file.data}
-                          download={file.name}
+                          href={file.url || file.data}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="block p-2 bg-green-50 text-green-700 rounded text-sm hover:bg-green-100 transition"
                         >
-                          📄 {file.name}
+                          🧾 {file.name}
                         </a>
                       ))}
                     </div>
@@ -1137,67 +1142,66 @@
         receipts: []
       });
 
-      const handleImageUpload = (e) => {
+      // Firebase StorageにアップロードしてURLを返す
+      const uploadToStorage = async (file, path) => {
+        const user = window.auth.currentUser;
+        if (!user) throw new Error('ログインが必要です');
+        const ref = window.storage.ref(`users/${user.uid}/${path}/${Date.now()}_${file.name}`);
+        await ref.put(file);
+        return await ref.getDownloadURL();
+      };
+
+      const [uploading, setUploading] = useState(false);
+
+      const handleImageUpload = async (e) => {
         const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            setFormData({ ...formData, qrCode: event.target.result });
-          };
-          reader.readAsDataURL(file);
+        if (!file) return;
+        setUploading(true);
+        try {
+          const url = await uploadToStorage(file, 'qrcodes');
+          setFormData(prev => ({ ...prev, qrCode: url }));
+        } catch (err) {
+          console.error('QRアップロードエラー:', err);
+          alert('アップロードに失敗しました');
         }
+        setUploading(false);
       };
 
-      const handleAttachmentsUpload = (e) => {
+      const handleAttachmentsUpload = async (e) => {
         const files = Array.from(e.target.files);
-        const filePromises = files.map(file => {
-          return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              resolve({
-                name: file.name,
-                data: event.target.result,
-                type: file.type
-              });
-            };
-            reader.readAsDataURL(file);
-          });
-        });
-
-        Promise.all(filePromises).then(newFiles => {
-          setFormData({ 
-            ...formData, 
-            attachments: [...(formData.attachments || []), ...newFiles]
-          });
-        });
+        setUploading(true);
+        try {
+          const newFiles = await Promise.all(files.map(async file => {
+            const url = await uploadToStorage(file, 'attachments');
+            return { name: file.name, url, type: file.type };
+          }));
+          setFormData(prev => ({ ...prev, attachments: [...(prev.attachments || []), ...newFiles] }));
+        } catch (err) {
+          console.error('添付アップロードエラー:', err);
+          alert('アップロードに失敗しました');
+        }
+        setUploading(false);
       };
 
-      const handleReceiptsUpload = (e) => {
+      const handleReceiptsUpload = async (e) => {
         const files = Array.from(e.target.files);
-        const filePromises = files.map(file => {
-          return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-              resolve({
-                name: file.name,
-                data: event.target.result,
-                type: file.type
-              });
-            };
-            reader.readAsDataURL(file);
-          });
-        });
-
-        Promise.all(filePromises).then(newFiles => {
-          setFormData({ 
-            ...formData, 
-            receipts: [...(formData.receipts || []), ...newFiles]
-          });
-        });
+        setUploading(true);
+        try {
+          const newFiles = await Promise.all(files.map(async file => {
+            const url = await uploadToStorage(file, 'receipts');
+            return { name: file.name, url, type: file.type };
+          }));
+          setFormData(prev => ({ ...prev, receipts: [...(prev.receipts || []), ...newFiles] }));
+        } catch (err) {
+          console.error('領収書アップロードエラー:', err);
+          alert('アップロードに失敗しました');
+        }
+        setUploading(false);
       };
 
       const handleSubmit = (e) => {
         e.preventDefault();
+        if (uploading) { alert('ファイルのアップロード中です。完了をお待ちください。'); return; }
         if (!type || !formData.title || !formData.datetime) {
           alert('種類、タイトル、出発時刻は必須です');
           return;
@@ -1611,6 +1615,7 @@
 
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        {uploading && <span className="text-purple-600 animate-pulse ml-2 text-xs">⬆️ アップロード中...</span>}
                         領収書（画像・PDF）
                       </label>
                       <input
