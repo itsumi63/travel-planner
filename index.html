@@ -14,6 +14,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <!-- SheetJS (Excel出力用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   
   <style>
     @media print {
@@ -218,43 +220,37 @@
       const [travels, setTravels] = useState([]);
       const [selectedTravel, setSelectedTravel] = useState(null);
       const [showAddTravel, setShowAddTravel] = useState(false);
+      const [editingTravel, setEditingTravel] = useState(null);
       const [loading, setLoading] = useState(true);
+      const [draggedTravelIndex, setDraggedTravelIndex] = useState(null);
+      const [travelOrder, setTravelOrder] = useState([]);
 
       useEffect(() => {
         if (!user) return;
-
-        // Firestoreからリアルタイムでデータ取得
         const unsubscribe = window.db
-          .collection('users')
-          .doc(user.uid)
-          .collection('travels')
+          .collection('users').doc(user.uid).collection('travels')
           .onSnapshot((snapshot) => {
-            const travelsData = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
+            const travelsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setTravels(travelsData);
             setLoading(false);
-          }, (error) => {
-            console.error('データ取得エラー:', error);
-            setLoading(false);
-          });
-
+          }, (error) => { console.error('データ取得エラー:', error); setLoading(false); });
         return unsubscribe;
       }, [user]);
 
+      // 表示順：orderフィールド優先、なければ開始日順
+      const sortedTravels = [...travels].sort((a, b) => {
+        if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+        return new Date(a.startDate) - new Date(b.startDate);
+      });
+
       const addTravel = async (travel) => {
         try {
-          const docRef = await window.db.collection('users').doc(user.uid).collection('travels').add({
-            ...travel,
-            items: [],
+          await window.db.collection('users').doc(user.uid).collection('travels').add({
+            ...travel, items: [], order: travels.length,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
           setShowAddTravel(false);
-        } catch (error) {
-          console.error('追加エラー:', error);
-          alert('旅行の追加に失敗しました');
-        }
+        } catch (error) { console.error('追加エラー:', error); alert('旅行の追加に失敗しました'); }
       };
 
       const updateTravel = async (updatedTravel) => {
@@ -262,35 +258,71 @@
           const { id, ...data } = updatedTravel;
           await window.db.collection('users').doc(user.uid).collection('travels').doc(id).update(data);
           setSelectedTravel(updatedTravel);
-        } catch (error) {
-          console.error('更新エラー:', error);
-          alert('更新に失敗しました');
-        }
+        } catch (error) { console.error('更新エラー:', error); alert('更新に失敗しました'); }
+      };
+
+      const editTravel = async (travel) => {
+        try {
+          const { id, ...data } = travel;
+          await window.db.collection('users').doc(user.uid).collection('travels').doc(id).update(data);
+          setEditingTravel(null);
+        } catch (error) { console.error('編集エラー:', error); alert('編集に失敗しました'); }
+      };
+
+      const duplicateTravel = async (travel) => {
+        try {
+          const { id, createdAt, ...data } = travel;
+          await window.db.collection('users').doc(user.uid).collection('travels').add({
+            ...data, name: `${data.name}（コピー）`, order: travels.length,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        } catch (error) { console.error('複製エラー:', error); alert('複製に失敗しました'); }
       };
 
       const deleteTravel = async (id) => {
         if (confirm('この旅行を削除しますか？')) {
           try {
             await window.db.collection('users').doc(user.uid).collection('travels').doc(id).delete();
-          } catch (error) {
-            console.error('削除エラー:', error);
-            alert('削除に失敗しました');
-          }
+          } catch (error) { console.error('削除エラー:', error); alert('削除に失敗しました'); }
         }
       };
 
-      const sortedTravels = [...travels].sort((a, b) => 
-        new Date(a.startDate) - new Date(b.startDate)
-      );
+      // 旅行のドラッグ並び替え
+      const handleTravelDragStart = (index) => setDraggedTravelIndex(index);
+
+      const handleTravelDragOver = (e, index) => {
+        e.preventDefault();
+        if (draggedTravelIndex === null || draggedTravelIndex === index) return;
+        const newSorted = [...sortedTravels];
+        const dragged = newSorted[draggedTravelIndex];
+        newSorted.splice(draggedTravelIndex, 1);
+        newSorted.splice(index, 0, dragged);
+        // ローカル即時反映用にorderを更新
+        newSorted.forEach((t, i) => { t._tempOrder = i; });
+        setDraggedTravelIndex(index);
+        setTravels(prev => prev.map(t => {
+          const found = newSorted.find(n => n.id === t.id);
+          return found ? { ...t, order: found._tempOrder } : t;
+        }));
+      };
+
+      const handleTravelDragEnd = async () => {
+        setDraggedTravelIndex(null);
+        // Firestoreに順序を保存
+        const batch = window.db.batch();
+        sortedTravels.forEach((t, i) => {
+          const ref = window.db.collection('users').doc(user.uid).collection('travels').doc(t.id);
+          batch.update(ref, { order: i });
+        });
+        try { await batch.commit(); } catch (e) { console.error('順序保存エラー:', e); }
+      };
 
       if (selectedTravel) {
         return (
           <TravelDetail 
-            travel={selectedTravel}
-            user={user}
+            travel={selectedTravel} user={user}
             onBack={() => setSelectedTravel(null)}
-            onUpdate={updateTravel}
-            onSignOut={onSignOut}
+            onUpdate={updateTravel} onSignOut={onSignOut}
           />
         );
       }
@@ -305,16 +337,8 @@
                   <p className="text-gray-600">旅行を整理して、快適な旅を</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <img 
-                    src={user.photoURL || 'https://via.placeholder.com/40'} 
-                    alt={user.displayName || 'User'}
-                    className="w-10 h-10 rounded-full"
-                  />
-                  <button
-                    onClick={onSignOut}
-                    className="text-gray-500 hover:text-gray-700 transition"
-                    title="ログアウト"
-                  >
+                  <img src={user.photoURL || 'https://via.placeholder.com/40'} alt={user.displayName || 'User'} className="w-10 h-10 rounded-full" />
+                  <button onClick={onSignOut} className="text-gray-500 hover:text-gray-700 transition" title="ログアウト">
                     <LogOut size={20} />
                   </button>
                 </div>
@@ -325,46 +349,48 @@
               onClick={() => setShowAddTravel(true)}
               className="w-full bg-indigo-600 text-white rounded-xl py-4 mb-6 font-semibold shadow-lg hover:bg-indigo-700 transition flex items-center justify-center gap-2"
             >
-              <Plus size={24} />
-              新しい旅行を追加
+              <Plus size={24} />新しい旅行を追加
             </button>
 
             {loading ? (
-              <div className="bg-white rounded-xl p-8 text-center text-gray-500">
-                読み込み中...
-              </div>
+              <div className="bg-white rounded-xl p-8 text-center text-gray-500">読み込み中...</div>
             ) : (
               <div className="space-y-4">
                 {sortedTravels.length === 0 ? (
                   <div className="bg-white rounded-xl p-8 text-center text-gray-500">
-                    旅行がまだありません<br />
-                  上のボタンから追加してください
-                </div>
-              ) : (
-                sortedTravels.map(travel => (
-                  <TravelCard 
-                    key={travel.id}
-                    travel={travel}
-                    onClick={() => setSelectedTravel(travel)}
-                    onDelete={deleteTravel}
-                  />
-                ))
-              )}
+                    旅行がまだありません<br />上のボタンから追加してください
+                  </div>
+                ) : (
+                  sortedTravels.map((travel, index) => (
+                    <TravelCard 
+                      key={travel.id} travel={travel} index={index}
+                      onClick={() => setSelectedTravel(travel)}
+                      onEdit={() => setEditingTravel(travel)}
+                      onDuplicate={() => duplicateTravel(travel)}
+                      onDelete={deleteTravel}
+                      onDragStart={handleTravelDragStart}
+                      onDragOver={handleTravelDragOver}
+                      onDragEnd={handleTravelDragEnd}
+                    />
+                  ))
+                )}
               </div>
             )}
 
             {showAddTravel && (
-              <AddTravelModal 
-                onClose={() => setShowAddTravel(false)}
-                onAdd={addTravel}
-              />
+              <TravelModal onClose={() => setShowAddTravel(false)} onSave={addTravel} />
+            )}
+            {editingTravel && (
+              <TravelModal travel={editingTravel} onClose={() => setEditingTravel(null)} onSave={editTravel} />
             )}
           </div>
         </div>
       );
     }
 
-    function TravelCard({ travel, onClick, onDelete }) {
+    function TravelCard({ travel, index, onClick, onEdit, onDuplicate, onDelete, onDragStart, onDragOver, onDragEnd }) {
+      const [showMenu, setShowMenu] = useState(false);
+
       const formatDateRange = (start, end) => {
         const startDate = new Date(start);
         const endDate = new Date(end);
@@ -374,55 +400,76 @@
       const totalAmount = (travel.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
       return (
-        <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition cursor-pointer">
-          <div className="p-5" onClick={onClick}>
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <h3 className="font-bold text-xl text-gray-800 mb-1">{travel.name}</h3>
-                <div className="text-sm text-gray-600">📍 {travel.destination}</div>
+        <div
+          draggable
+          onDragStart={() => onDragStart(index)}
+          onDragOver={(e) => onDragOver(e, index)}
+          onDragEnd={onDragEnd}
+          className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition"
+        >
+          <div className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="text-gray-300 cursor-grab mt-1">
+                <GripVertical size={20} />
               </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(travel.id);
-                }}
-                className="text-gray-400 hover:text-red-500 transition"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Calendar size={16} />
-              {formatDateRange(travel.startDate, travel.endDate)}
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <div className="text-sm text-gray-500">{travel.items?.length || 0}件の予定</div>
-              {totalAmount > 0 && (
-                <div className="text-sm font-semibold text-indigo-600">
-                  合計 ¥{totalAmount.toLocaleString()}
+              <div className="flex-1 cursor-pointer" onClick={onClick}>
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="font-bold text-xl text-gray-800 mb-1">{travel.name}</h3>
+                    <div className="text-sm text-gray-600">📍 {travel.destination}</div>
+                  </div>
+                  <div className="relative" onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => setShowMenu(!showMenu)}
+                      className="text-gray-400 hover:text-gray-600 p-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle>
+                      </svg>
+                    </button>
+                    {showMenu && (
+                      <div className="absolute right-0 top-8 bg-white rounded-xl shadow-xl border border-gray-100 z-10 w-40 py-1">
+                        <button onClick={() => { onEdit(); setShowMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <Edit size={14} /> 編集
+                        </button>
+                        <button onClick={() => { onDuplicate(); setShowMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                          複製
+                        </button>
+                        <hr className="my-1" />
+                        <button onClick={() => { onDelete(travel.id); setShowMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                          <X size={14} /> 削除
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Calendar size={16} />
+                  {formatDateRange(travel.startDate, travel.endDate)}
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="text-sm text-gray-500">{travel.items?.length || 0}件の予定</div>
+                  {totalAmount > 0 && (
+                    <div className="text-sm font-semibold text-indigo-600">合計 ¥{totalAmount.toLocaleString()}</div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       );
     }
 
-    function AddTravelModal({ onClose, onAdd }) {
-      const [formData, setFormData] = useState({
-        name: '',
-        destination: '',
-        startDate: '',
-        endDate: ''
-      });
+    function TravelModal({ travel = null, onClose, onSave }) {
+      const [formData, setFormData] = useState(travel || { name: '', destination: '', startDate: '', endDate: '' });
 
       const handleSubmit = (e) => {
         e.preventDefault();
         if (!formData.name || !formData.destination || !formData.startDate || !formData.endDate) {
-          alert('すべての項目を入力してください');
-          return;
+          alert('すべての項目を入力してください'); return;
         }
-        onAdd(formData);
+        onSave(formData);
       };
 
       return (
@@ -430,69 +477,40 @@
           <div className="bg-white rounded-2xl max-w-lg w-full">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">新しい旅行</h2>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                  <X size={24} />
-                </button>
+                <h2 className="text-2xl font-bold text-gray-800">{travel ? '旅行を編集' : '新しい旅行'}</h2>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
               </div>
-
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    旅行名 *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">旅行名 *</label>
+                  <input type="text" value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="例: 東京出張、札幌旅行"
-                  />
+                    placeholder="例: 東京出張、札幌旅行" />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    行き先 *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.destination}
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">行き先 *</label>
+                  <input type="text" value={formData.destination}
                     onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="例: 東京、札幌"
-                  />
+                    placeholder="例: 東京、札幌" />
                 </div>
-
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      開始日 *
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.startDate}
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">開始日 *</label>
+                    <input type="date" value={formData.startDate}
                       onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      終了日 *
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.endDate}
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">終了日 *</label>
+                    <input type="date" value={formData.endDate}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    />
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
                   </div>
                 </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-indigo-600 text-white rounded-lg py-3 font-semibold hover:bg-indigo-700 transition"
-                >
-                  追加
+                <button type="submit" className="w-full bg-indigo-600 text-white rounded-lg py-3 font-semibold hover:bg-indigo-700 transition">
+                  {travel ? '保存' : '追加'}
                 </button>
               </form>
             </div>
@@ -537,6 +555,13 @@
         }
       };
 
+      const duplicateItem = (item) => {
+        const { id, ...rest } = item;
+        const newItem = { ...rest, id: Date.now(), title: `${item.title}（コピー）` };
+        const newItems = [...items, newItem];
+        saveItems(newItems);
+      };
+
       const handleDragStart = (index) => {
         setDraggedIndex(index);
       };
@@ -559,8 +584,8 @@
         setDraggedIndex(null);
       };
 
-      // CSV出力機能
-      const downloadCSV = () => {
+      // Excel出力機能
+      const downloadExcel = () => {
         const typeLabel = { flight: '飛行機', train: '電車', hotel: 'ホテル', other: 'その他' };
         const statusLabel = {
           flight: { undecided: '未定', reserved_unpaid: '予約（未購入）', reserved_paid: '予約（購入済）' },
@@ -569,46 +594,70 @@
           other: { undecided: '未定', reserved: '予約済' }
         };
 
-        const rows = [
-          ['旅行名', travel.name],
-          ['行き先', travel.destination],
-          ['期間', `${travel.startDate} 〜 ${travel.endDate}`],
-          [''],
-          ['種類', 'タイトル', '日時', 'ステータス', '金額（円）', '詳細', 'メモ']
-        ];
+        const wb = XLSX.utils.book_new();
+
+        // ===== 旅費明細シート =====
+        const wsData = [];
+        wsData.push(['旅行名', travel.name]);
+        wsData.push(['行き先', travel.destination]);
+        wsData.push(['期間', travel.startDate + ' 〜 ' + travel.endDate]);
+        wsData.push([]);
+        wsData.push(['種類', 'タイトル', '日時', 'ステータス', '金額（円）', '詳細', 'キャンセル期日', 'メモ']);
 
         items.forEach(item => {
           const status = item.status ? (statusLabel[item.type]?.[item.status] || item.status) : '';
           let detail = '';
-          if (item.type === 'flight') detail = [item.airline, item.flightNumber, item.flightTimeStart && item.flightTimeEnd ? `${item.flightTimeStart}〜${item.flightTimeEnd}` : ''].filter(Boolean).join(' ');
+          if (item.type === 'flight') detail = [item.airline, item.flightNumber, item.flightTimeStart && item.flightTimeEnd ? item.flightTimeStart + '〜' + item.flightTimeEnd : ''].filter(Boolean).join(' ');
           if (item.type === 'train') detail = [item.trainLine, item.trainDestination, item.trainPlatform].filter(Boolean).join(' ');
           if (item.type === 'hotel') detail = item.address || '';
           if (item.type === 'other') detail = item.destination || '';
 
-          rows.push([
+          wsData.push([
             typeLabel[item.type] || item.type,
             item.title,
             item.datetime ? new Date(item.datetime).toLocaleString('ja-JP') : '',
             status,
-            item.amount || '',
+            item.amount ? Number(item.amount) : '',
             detail,
+            item.cancelDeadline ? new Date(item.cancelDeadline).toLocaleString('ja-JP') : '',
             item.notes || ''
           ]);
         });
 
         const total = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-        rows.push(['']);
-        rows.push(['合計金額', '', '', '', total, '', '']);
+        wsData.push([]);
+        wsData.push(['合計金額', '', '', '', total, '', '', '']);
 
-        const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-        const bom = '\uFEFF';
-        const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${travel.name}_旅費明細.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [
+          { wch: 10 }, { wch: 28 }, { wch: 20 }, { wch: 16 },
+          { wch: 12 }, { wch: 30 }, { wch: 20 }, { wch: 30 }
+        ];
+        XLSX.utils.book_append_sheet(wb, ws, '旅費明細');
+
+        // ===== サマリーシート =====
+        const summary = {};
+        items.forEach(item => {
+          const label = typeLabel[item.type] || item.type;
+          if (!summary[label]) summary[label] = { count: 0, total: 0 };
+          summary[label].count++;
+          summary[label].total += Number(item.amount) || 0;
+        });
+
+        const wsSumData = [
+          ['旅行名', travel.name],
+          ['行き先', travel.destination],
+          [],
+          ['種類', '件数', '小計（円）'],
+          ...Object.entries(summary).map(([k, v]) => [k, v.count, v.total]),
+          [],
+          ['合計', items.length, total]
+        ];
+        const wsSum = XLSX.utils.aoa_to_sheet(wsSumData);
+        wsSum['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 14 }];
+        XLSX.utils.book_append_sheet(wb, wsSum, 'サマリー');
+
+        XLSX.writeFile(wb, travel.name + '_旅費明細.xlsx');
       };
 
       const totalAmount = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -648,16 +697,16 @@
                 予定を追加
               </button>
               <button
-                onClick={downloadCSV}
+                onClick={downloadExcel}
                 className="bg-green-600 text-white rounded-xl px-4 py-4 font-semibold shadow-lg hover:bg-green-700 transition flex items-center justify-center gap-2"
-                title="CSVダウンロード"
+                title="Excelダウンロード"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                CSV
+                Excel
               </button>
             </div>
 
@@ -674,6 +723,7 @@
                     item={item}
                     index={index}
                     onEdit={() => setEditingItem(item)}
+                    onDuplicate={() => duplicateItem(item)}
                     onDelete={() => deleteItem(item.id)}
                     onQRClick={setSelectedQR}
                     onDragStart={handleDragStart}
@@ -712,7 +762,7 @@
       );
     }
 
-    function ItemCard({ item, index, onEdit, onDelete, onQRClick, onDragStart, onDragOver, onDragEnd }) {
+    function ItemCard({ item, index, onEdit, onDuplicate, onDelete, onQRClick, onDragStart, onDragOver, onDragEnd }) {
       const getIcon = () => {
         switch(item.type) {
           case 'flight': return <Plane className="text-blue-600" size={24} />;
@@ -795,10 +845,13 @@
                       <div className="text-sm font-bold text-indigo-600">¥{Number(item.amount).toLocaleString()}</div>
                     )}
                     <div className="flex gap-2 no-print">
-                      <button onClick={onEdit} className="text-gray-400 hover:text-indigo-500 transition">
+                      <button onClick={onEdit} className="text-gray-400 hover:text-indigo-500 transition" title="編集">
                         <Edit size={18} />
                       </button>
-                      <button onClick={onDelete} className="text-gray-400 hover:text-red-500 transition">
+                      <button onClick={onDuplicate} className="text-gray-400 hover:text-green-500 transition" title="複製">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      </button>
+                      <button onClick={onDelete} className="text-gray-400 hover:text-red-500 transition" title="削除">
                         <X size={18} />
                       </button>
                     </div>
@@ -862,6 +915,20 @@
                         })}
                       </div>
                     )}
+                    {item.cancelDeadline && (() => {
+                      const deadline = new Date(item.cancelDeadline);
+                      const now = new Date();
+                      const diffDays = (deadline - now) / (1000 * 60 * 60 * 24);
+                      const isPast = diffDays < 0;
+                      const isUrgent = diffDays >= 0 && diffDays <= 3;
+                      return (
+                        <div className={`flex items-center gap-1 font-semibold px-2 py-1 rounded-lg ${isPast ? 'bg-gray-100 text-gray-500' : isUrgent ? 'bg-red-100 text-red-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                          ⚠️ キャンセル期日: {deadline.toLocaleString('ja-JP', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {isPast && <span className="text-xs ml-1">（期限切れ）</span>}
+                          {isUrgent && <span className="text-xs ml-1">（あと{Math.max(0, Math.floor(diffDays))}日！）</span>}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -1416,6 +1483,17 @@
                             type="datetime-local"
                             value={formData.checkOut || getDefaultCheckOut(formData.datetime)}
                             onChange={(e) => setFormData({ ...formData, checkOut: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            ⚠️ キャンセル期日
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={formData.cancelDeadline || ''}
+                            onChange={(e) => setFormData({ ...formData, cancelDeadline: e.target.value })}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                           />
                         </div>
