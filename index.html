@@ -1080,24 +1080,14 @@
                 )}
 
                 {item.type === 'hotel' && item.address && (
-                  <>
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 block w-full bg-green-50 text-green-700 rounded-lg py-3 text-center font-semibold hover:bg-green-100 transition no-print"
-                    >
-                      🗺️ Googleマップで見る
-                    </a>
-                    <a
-                      href={`https://www.jalan.net/uw/uwp0400/uww0401init.do?keyword=${encodeURIComponent(item.title)}&area=`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 block w-full bg-orange-50 text-orange-700 rounded-lg py-3 text-center font-semibold hover:bg-orange-100 transition no-print"
-                    >
-                      🏨 じゃらんで検索
-                    </a>
-                  </>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 block w-full bg-green-50 text-green-700 rounded-lg py-3 text-center font-semibold hover:bg-green-100 transition no-print"
+                  >
+                    🗺️ Googleマップで見る
+                  </a>
                 )}
 
                 {item.type === 'other' && (
