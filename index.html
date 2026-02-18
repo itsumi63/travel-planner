@@ -673,40 +673,65 @@
       // 領収書一括ダウンロード機能
       const downloadAllReceipts = async () => {
         const allReceipts = items.flatMap(item => item.receipts || []);
+        console.log('全領収書:', allReceipts);
+        
         if (allReceipts.length === 0) {
           alert('ダウンロードできる領収書がありません');
           return;
         }
 
         const zip = new JSZip();
-        let index = 1;
+        let successCount = 0;
 
-        for (const receipt of allReceipts) {
+        for (let i = 0; i < allReceipts.length; i++) {
+          const receipt = allReceipts[i];
+          console.log(`処理中[${i + 1}/${allReceipts.length}]:`, receipt.name, receipt.url ? 'URL' : 'Base64');
+          
           try {
             if (receipt.url) {
-              // Firebase StorageのURL → fetch
-              const response = await fetch(receipt.url);
+              // Firebase StorageのURL
+              console.log('  Fetching:', receipt.url);
+              const response = await fetch(receipt.url, { mode: 'cors' });
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
               const blob = await response.blob();
-              const ext = receipt.name.split('.').pop() || 'file';
-              zip.file(`${index}_${receipt.name}`, blob);
+              console.log('  Blob size:', blob.size);
+              zip.file(`${i + 1}_${receipt.name}`, blob);
+              successCount++;
             } else if (receipt.data) {
               // Base64データ
               const base64Data = receipt.data.split(',')[1];
-              zip.file(`${index}_${receipt.name}`, base64Data, { base64: true });
+              if (base64Data) {
+                console.log('  Base64 length:', base64Data.length);
+                zip.file(`${i + 1}_${receipt.name}`, base64Data, { base64: true });
+                successCount++;
+              }
+            } else {
+              console.warn('  スキップ: URLもdataもなし');
             }
-            index++;
           } catch (err) {
-            console.error(`${receipt.name}のダウンロードエラー:`, err);
+            console.error(`  エラー[${receipt.name}]:`, err);
           }
         }
 
+        console.log(`成功: ${successCount}/${allReceipts.length}件`);
+
+        if (successCount === 0) {
+          alert('領収書のダウンロードに失敗しました。
+ブラウザのコンソール（F12）でエラーを確認してください。');
+          return;
+        }
+
+        console.log('ZIP生成中...');
         const content = await zip.generateAsync({ type: 'blob' });
+        console.log('ZIP size:', content.size);
+        
         const url = URL.createObjectURL(content);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${travel.name}_領収書.zip`;
+        a.download = `${travel.name}_領収書_${successCount}件.zip`;
         a.click();
         URL.revokeObjectURL(url);
+        console.log('ダウンロード完了');
       };
 
       const totalAmount = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
