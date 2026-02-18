@@ -756,7 +756,10 @@
               <AIImportModal
                 travel={travel}
                 onClose={() => setShowAIImport(false)}
-                onImport={(newItem) => { addItem(newItem); setShowAIImport(false); }}
+                onImport={(items) => {
+                  items.forEach(item => addItem(item));
+                  setShowAIImport(false);
+                }}
               />
             )}
 
@@ -955,6 +958,27 @@
                         </div>
                       );
                     })()}
+                    {item.bookingSite && (() => {
+                      const sites = {
+                        jalan: { name: 'じゃらん', url: 'https://www.jalan.net/', color: 'bg-red-500 hover:bg-red-600' },
+                        rakuten: { name: '楽天トラベル', url: 'https://travel.rakuten.co.jp/', color: 'bg-red-600 hover:bg-red-700' },
+                        booking: { name: 'Booking.com', url: 'https://www.booking.com/', color: 'bg-blue-600 hover:bg-blue-700' },
+                        agoda: { name: 'Agoda', url: 'https://www.agoda.com/', color: 'bg-purple-600 hover:bg-purple-700' },
+                        expedia: { name: 'Expedia', url: 'https://www.expedia.co.jp/', color: 'bg-yellow-600 hover:bg-yellow-700' },
+                        other: { name: 'その他', url: item.customLink || '#', color: 'bg-gray-600 hover:bg-gray-700' }
+                      };
+                      const site = sites[item.bookingSite];
+                      return site ? (
+                        <a
+                          href={site.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition ${site.color}`}
+                        >
+                          🏨 {site.name}で確認
+                        </a>
+                      ) : null;
+                    })()}
                   </div>
                 )}
 
@@ -1122,6 +1146,7 @@
         datetime: travel.startDate + 'T09:00',
         status: 'undecided',
         amount: '',
+        bookingSite: '',
         airline: '',
         flightNumber: '',
         flightTimeStart: '',
@@ -1524,6 +1549,24 @@
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                           />
                         </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            予約サイト
+                          </label>
+                          <select
+                            value={formData.bookingSite || ''}
+                            onChange={(e) => setFormData({ ...formData, bookingSite: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          >
+                            <option value="">選択してください</option>
+                            <option value="jalan">じゃらん</option>
+                            <option value="rakuten">楽天トラベル</option>
+                            <option value="booking">Booking.com</option>
+                            <option value="agoda">Agoda</option>
+                            <option value="expedia">Expedia</option>
+                            <option value="other">その他</option>
+                          </select>
+                        </div>
                       </>
                     )}
 
@@ -1670,6 +1713,7 @@
       const [fileType, setFileType] = useState(''); // 'image' | 'pdf'
       const [loading, setLoading] = useState(false);
       const [previews, setPreviews] = useState([]); // 複数予定対応
+      const [selectedIndexes, setSelectedIndexes] = useState([]); // チェックボックス選択状態
       const [error, setError] = useState('');
       const [apiKeyInput, setApiKeyInput] = useState(window.CLAUDE_API_KEY || '');
       const [showApiKeySetting, setShowApiKeySetting] = useState(
@@ -1979,34 +2023,76 @@ JSONの配列のみを返し、説明文・コードブロックは不要です�
               {/* プレビュー */}
               {previews.length > 0 && (
                 <div className="mt-4 space-y-3">
-                  <div className="font-bold text-purple-700">📋 解析結果 — {previews.length}件見つかりました</div>
-                  {previews.map((p, idx) => (
-                    <div key={idx} className="border-2 border-purple-200 rounded-xl p-4 bg-purple-50">
-                      <div className={`font-bold mb-2 ${typeColor[p.type] || 'text-gray-700'}`}>
-                        {typeLabel[p.type] || p.type}：{p.title}
-                      </div>
-                      <div className="space-y-1 text-sm">
-                        {p.datetime && <div><span className="text-gray-500">日時: </span>{new Date(p.datetime).toLocaleString('ja-JP', {month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>}
-                        {p.checkOut && <div><span className="text-gray-500">チェックアウト: </span>{new Date(p.checkOut).toLocaleString('ja-JP', {month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>}
-                        {p.trainDestination && <div><span className="text-gray-500">到着: </span>{p.trainDestination}</div>}
-                        {p.trainLine && <div><span className="text-gray-500">路線: </span>{p.trainLine}</div>}
-                        {p.airline && <div><span className="text-gray-500">航空会社: </span>{p.airline} {p.flightNumber}</div>}
-                        {p.amount > 0 && <div><span className="text-gray-500">金額: </span><span className="font-bold text-indigo-600">¥{Number(p.amount).toLocaleString()}</span></div>}
-                        {p.cancelDeadline && <div><span className="text-gray-500">キャンセル期日: </span><span className="text-amber-700 font-semibold">{new Date(p.cancelDeadline).toLocaleString('ja-JP', {month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>}
-                        {p.notes && <div><span className="text-gray-500">メモ: </span>{p.notes}</div>}
-                      </div>
-                      <button onClick={() => onImport(p)}
-                        className="w-full mt-3 bg-indigo-600 text-white rounded-lg py-2 text-sm font-semibold hover:bg-indigo-700 transition">
-                        ✅ この予定を追加
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-purple-700">📋 解析結果 — {previews.length}件</div>
+                    {previews.length > 1 && (
+                      <button
+                        onClick={() => setSelectedIndexes(selectedIndexes.length === previews.length ? [] : previews.map((_, i) => i))}
+                        className="text-xs text-purple-600 underline"
+                      >
+                        {selectedIndexes.length === previews.length ? '全解除' : '全選択'}
                       </button>
+                    )}
+                  </div>
+                  {previews.map((p, idx) => (
+                    <div key={idx} className={`border-2 rounded-xl p-4 transition ${selectedIndexes.includes(idx) ? 'border-indigo-500 bg-indigo-50' : 'border-purple-200 bg-purple-50'}`}>
+                      <div className="flex items-start gap-3">
+                        {previews.length > 1 && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIndexes.includes(idx)}
+                            onChange={() => {
+                              setSelectedIndexes(prev =>
+                                prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+                              );
+                            }}
+                            className="mt-1 w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <div className={`font-bold mb-2 ${typeColor[p.type] || 'text-gray-700'}`}>
+                            {typeLabel[p.type] || p.type}：{p.title}
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            {p.datetime && <div><span className="text-gray-500">日時: </span>{new Date(p.datetime).toLocaleString('ja-JP', {month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>}
+                            {p.checkOut && <div><span className="text-gray-500">チェックアウト: </span>{new Date(p.checkOut).toLocaleString('ja-JP', {month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>}
+                            {p.trainDestination && <div><span className="text-gray-500">到着: </span>{p.trainDestination}</div>}
+                            {p.trainLine && <div><span className="text-gray-500">路線: </span>{p.trainLine}</div>}
+                            {p.airline && <div><span className="text-gray-500">航空会社: </span>{p.airline} {p.flightNumber}</div>}
+                            {p.amount > 0 && <div><span className="text-gray-500">金額: </span><span className="font-bold text-indigo-600">¥{Number(p.amount).toLocaleString()}</span></div>}
+                            {p.cancelDeadline && <div><span className="text-gray-500">キャンセル期日: </span><span className="text-amber-700 font-semibold">{new Date(p.cancelDeadline).toLocaleString('ja-JP', {month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span></div>}
+                            {p.notes && <div><span className="text-gray-500">メモ: </span>{p.notes}</div>}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   ))}
-                  {previews.length > 1 && (
-                    <button onClick={() => { previews.forEach(p => onImport(p)); }}
-                      className="w-full bg-gray-700 text-white rounded-xl py-3 font-semibold hover:bg-gray-800 transition">
-                      📋 {previews.length}件すべて追加
-                    </button>
-                  )}
+                  <div className="flex gap-2">
+                    {previews.length === 1 ? (
+                      <button onClick={() => onImport(previews)}
+                        className="flex-1 bg-indigo-600 text-white rounded-xl py-3 font-semibold hover:bg-indigo-700 transition">
+                        ✅ 追加する
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            const selected = previews.filter((_, i) => selectedIndexes.includes(i));
+                            if (selected.length === 0) { alert('追加する予定を選択してください'); return; }
+                            onImport(selected);
+                          }}
+                          disabled={selectedIndexes.length === 0}
+                          className="flex-1 bg-indigo-600 text-white rounded-xl py-3 font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          ✅ 選択した{selectedIndexes.length}件を追加
+                        </button>
+                        <button onClick={() => onImport(previews)}
+                          className="bg-gray-700 text-white rounded-xl px-4 py-3 font-semibold hover:bg-gray-800 transition whitespace-nowrap">
+                          📋 全{previews.length}件追加
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
