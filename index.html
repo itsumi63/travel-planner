@@ -16,6 +16,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <!-- Firebase Storage SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+  <!-- JSZip (ZIP作成用) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <!-- SheetJS (Excel出力用) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   
@@ -668,6 +670,45 @@
         XLSX.writeFile(wb, travel.name + '_旅費明細.xlsx');
       };
 
+      // 領収書一括ダウンロード機能
+      const downloadAllReceipts = async () => {
+        const allReceipts = items.flatMap(item => item.receipts || []);
+        if (allReceipts.length === 0) {
+          alert('ダウンロードできる領収書がありません');
+          return;
+        }
+
+        const zip = new JSZip();
+        let index = 1;
+
+        for (const receipt of allReceipts) {
+          try {
+            if (receipt.url) {
+              // Firebase StorageのURL → fetch
+              const response = await fetch(receipt.url);
+              const blob = await response.blob();
+              const ext = receipt.name.split('.').pop() || 'file';
+              zip.file(`${index}_${receipt.name}`, blob);
+            } else if (receipt.data) {
+              // Base64データ
+              const base64Data = receipt.data.split(',')[1];
+              zip.file(`${index}_${receipt.name}`, base64Data, { base64: true });
+            }
+            index++;
+          } catch (err) {
+            console.error(`${receipt.name}のダウンロードエラー:`, err);
+          }
+        }
+
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${travel.name}_領収書.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
       const totalAmount = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
       return (
@@ -725,6 +766,18 @@
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
                 Excel
+              </button>
+              <button
+                onClick={downloadAllReceipts}
+                className="bg-blue-600 text-white rounded-xl px-4 py-4 font-semibold shadow-lg hover:bg-blue-700 transition flex items-center justify-center gap-2"
+                title="領収書一括ダウンロード"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                  <rect x="1" y="3" width="22" height="5"></rect>
+                  <line x1="10" y1="12" x2="14" y2="12"></line>
+                </svg>
+                領収書
               </button>
             </div>
 
