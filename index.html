@@ -595,7 +595,15 @@
       };
 
       // Excel出力機能
-      const downloadExcel = () => {
+              const handleClaudeImport = () => {
+          const travelName = currentTravel ? currentTravel.name : '現在の旅行';
+          const msg = `同じタブグループにある予約サイト（ANA・JAL・じゃらん・楽天トラベル・Yahoo!乗り換え案内など）のページを読み取って、「${travelName}」の旅行に予定を自動で追加してください。各タブの内容を確認して、フライト・ホテル・乗り換えの情報を入力してください。`;
+          navigator.clipboard.writeText(msg).then(() => {
+            alert('✅ Claudeへの指示をコピーしました！\nClaude in Chromeのサイドパネルに貼り付けてEnterを押してください。');
+          });
+        };
+
+        const downloadExcel = () => {
         const typeLabel = { flight: '飛行機', train: '電車', hotel: 'ホテル', other: 'その他' };
         const statusLabel = {
           flight: { undecided: '未定', reserved_unpaid: '予約（未購入）', reserved_paid: '予約（購入済）' },
@@ -778,6 +786,13 @@
                   <path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 8v4l3 3"/><path d="M18 2l4 4-4 4"/><path d="M22 2l-4 4"/>
                 </svg>
                 AI入力
+              </button>
+              <button
+                onClick={handleClaudeImport}
+                className="bg-orange-500 text-white rounded-xl px-4 py-4 font-semibold shadow-lg hover:bg-orange-600 transition flex items-center justify-center gap-2"
+                title="同じタブグループの予約ページを自動取り込み"
+              >
+                🤖 Claude取込
               </button>
               <button
                 onClick={downloadExcel}
