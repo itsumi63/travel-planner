@@ -787,13 +787,24 @@
                 </svg>
                 AI入力
               </button>
-              <button
-                onClick={handleClaudeImport}
-                className="bg-orange-500 text-white rounded-xl px-4 py-4 font-semibold shadow-lg hover:bg-orange-600 transition flex items-center justify-center gap-2"
-                title="同じタブグループの予約ページを自動取り込み"
-              >
-                🤖 Claude取込
-              </button>
+              <div className="relative group">
+                <button
+                  onClick={handleClaudeImport}
+                  className="bg-orange-500 text-white rounded-xl px-4 py-4 font-semibold shadow-lg hover:bg-orange-600 transition flex items-center justify-center gap-2"
+                >
+                  🤖 Claude取込
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 bg-gray-900 text-white text-sm rounded-xl p-3 hidden group-hover:block shadow-xl z-50 pointer-events-none">
+                  <div className="font-bold text-orange-300 mb-2">📋 使い方</div>
+                  <div className="mb-2">
+                    <span className="text-orange-300 font-semibold">方法①</span> このボタンを押す → 指示文がコピーされる → Claude in Chromeに貼り付けてEnter
+                  </div>
+                  <div>
+                    <span className="text-orange-300 font-semibold">方法②</span> Claude in Chromeで <span className="bg-gray-700 px-1 rounded font-mono">/travel</span> と入力するだけ
+                  </div>
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
               <button
                 onClick={downloadExcel}
                 className="bg-green-600 text-white rounded-xl px-4 py-4 font-semibold shadow-lg hover:bg-green-700 transition flex items-center justify-center gap-2"
