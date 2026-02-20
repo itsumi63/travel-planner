@@ -214,6 +214,13 @@
                 </svg>
                 Googleでログイン
               </button>
+              <button
+                onClick={() => setSortByTime(prev => !prev)}
+                className={`rounded-xl px-4 py-4 font-semibold shadow-lg transition flex items-center justify-center gap-2 ${sortByTime ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}`}
+                title="出発時刻順に並べ替え"
+              >
+                {sortByTime ? '🕐 時間順' : '🕐 時間順'}
+              </button>
               <p className="text-xs text-gray-500 mt-6">
                 ログインすることで、利用規約に同意したものとみなされます
               </p>
@@ -831,6 +838,17 @@
               </button>
             </div>
 
+            {/* 時間順ソートボタン */}
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={() => setSortByTime(prev => !prev)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold shadow transition ${sortByTime ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'}`}
+                title="出発時刻で並べ替え"
+              >
+                ⏰ {sortByTime ? '時間順（ON）' : '時間順（OFF）'}
+              </button>
+            </div>
+
             <div className="space-y-4">
               {items.length === 0 ? (
                 <div className="bg-white rounded-xl p-8 text-center text-gray-500">
@@ -838,7 +856,14 @@
                   上のボタンから追加してください
                 </div>
               ) : (
-                items.map((item, index) => (
+                (sortByTime
+                  ? [...items].sort((a, b) => {
+                      const ta = a.datetime ? new Date(a.datetime).getTime() : 0;
+                      const tb = b.datetime ? new Date(b.datetime).getTime() : 0;
+                      return ta - tb;
+                    })
+                  : items
+                ).map((item, index) => (
                   <ItemCard
                     key={item.id}
                     item={item}
