@@ -537,6 +537,7 @@
 
     function TravelDetail({ travel, onBack, onUpdate }) {
       const [items, setItems] = useState(travel.items || []);
+        const [sortByTime, setSortByTime] = React.useState(false);
       const [showAddItem, setShowAddItem] = useState(false);
       const [editingItem, setEditingItem] = useState(null);
       const [selectedQR, setSelectedQR] = useState(null);
