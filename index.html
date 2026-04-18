@@ -780,14 +780,14 @@
             <div className="flex gap-3 mb-6 no-print overflow-x-auto pb-2 items-stretch">
               <button
                 onClick={() => setShowAddItem(true)}
-                className="flex-none w-24 h-16 bg-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:bg-indigo-700 transition flex nter justify-center gap-2"
+                className="flex-none w-28 h-16 bg-indigo-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-indigo-700 transition flex flex-col items-center justify-center gap-1 whitespace-nowrap"
               >
-                <Plus size={24} />
+                <Plus size={20} />
                 予定を追加
               </button>
               <button
                 onClick={() => setShowAIImport(true)}
-                className="flex-none w-24 h-16 bg-purple-600 text-white rounded-xl font-semibold shadow-lg hover:bg-purple-700 transition flex er justify-center gap-2"
+                className="flex-none w-28 h-16 bg-purple-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-purple-700 transition flex flex-col items-center justify-center gap-1 whitespace-nowrap"
                 title="AIで自動入力"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -798,9 +798,10 @@
               <div className="relative group">
                 <button
                   onClick={handleClaudeImport}
-                  className="flex-none w-24 h-16 bg-orange-500 text-white rounded-xl font-semibold shadow-lg hover:bg-orange-600 transition flex er justify-center gap-2"
+                  className="flex-none w-28 h-16 bg-orange-500 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-orange-600 transition flex flex-col items-center justify-center gap-1 whitespace-nowrap"
                 >
-                  🤖 Claude取込
+                  <span className="text-lg leading-none">🤖</span>
+                  <span>Claude取込</span>
                 </button>
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 bg-gray-900 text-white text-sm rounded-xl p-3 hidden group-hover:block shadow-xl z-50 pointer-events-none">
                   <div className="font-bold text-orange-300 mb-2">📋 使い方</div>
@@ -815,7 +816,7 @@
               </div>
               <button
                 onClick={downloadExcel}
-                className="flex-none w-24 h-16 bg-green-600 text-white rounded-xl font-semibold shadow-lg hover:bg-green-700 transition flex fl justify-center gap-2"
+                className="flex-none w-28 h-16 bg-green-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-green-700 transition flex flex-col items-center justify-center gap-1 whitespace-nowrap"
                 title="Excelダウンロード"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -827,7 +828,7 @@
               </button>
               <button
                 onClick={downloadAllReceipts}
-                className="flex-none w-24 h-16 bg-blue-600 text-white rounded-xl font-semibold shadow-lg hover:bg-blue-700 transition flex flexustify-center gap-2"
+                className="flex-none w-28 h-16 bg-blue-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-blue-700 transition flex flex-col items-center justify-center gap-1 whitespace-nowrap"
                 title="領収書一括ダウンロード"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
