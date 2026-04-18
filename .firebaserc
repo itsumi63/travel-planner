@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "ai-kakeibo-430b5"
+    "default": "travel-planner-af8bd",
+    "functions": "ai-kakeibo-430b5"
   }
 }
