@@ -4,7 +4,7 @@
  * - Firebase / 外部APIなどの動的リクエストはネットワーク優先
  * - バージョン番号を上げると古いキャッシュを自動削除
  */
-const CACHE_VERSION = 'v1.0.0';
+const CACHE_VERSION = 'v1.0.1';
 const CACHE_NAME = `tabi-no-shiori-${CACHE_VERSION}`;
 
 // アプリシェル：このファイル一覧はインストール時に先読みする
