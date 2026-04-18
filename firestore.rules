@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 許可リスト: 認証済みなら誰でも自分が許可されているか確認できる
+    // 書き込みはFirebase Console経由のみ（クライアントからは禁止）
+    match /config/allowedUsers {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ユーザーデータ: 本人かつ許可リストに載っているときだけ読み書きOK
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                      && request.auth.uid == userId
+                      && request.auth.token.email != null
+                      && request.auth.token.email in
+                         get(/databases/$(database)/documents/config/allowedUsers).data.emails;
+    }
+
+    // その他はすべて拒否
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
