@@ -4,7 +4,7 @@
  * - Firebase / 外部APIなどの動的リクエストはネットワーク優先
  * - バージョン番号を上げると古いキャッシュを自動削除
  */
-const CACHE_VERSION = 'v1.0.7';
+const CACHE_VERSION = 'v1.1.0';
 const CACHE_NAME = `tabi-no-shiori-${CACHE_VERSION}`;
 
 // アプリシェル：このファイル一覧はインストール時に先読みする
@@ -18,6 +18,13 @@ const APP_SHELL = [
   './apple-touch-icon.png',
   './favicon-32.png'
 ];
+
+// クライアントからの SKIP_WAITING メッセージで即時 activate
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
 // インストール：シェルを先読み
 self.addEventListener('install', (event) => {
