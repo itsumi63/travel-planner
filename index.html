@@ -226,13 +226,6 @@
                 </svg>
                 Googleでログイン
               </button>
-              <button
-                onClick={() => setSortByTime(prev => !prev)}
-                className={`rounded-xl px-4 py-4 font-semibold shadow-lg transition flex items-center justify-center gap-2 ${sortByTime ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}`}
-                title="出発時刻順に並べ替え"
-              >
-                {sortByTime ? '🕐 時間順' : '🕐 時間順'}
-              </button>
               <p className="text-xs text-gray-500 mt-6">
                 ログインすることで、利用規約に同意したものとみなされます
               </p>
