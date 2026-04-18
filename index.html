@@ -37,6 +37,12 @@
     @media print {
       .no-print { display: none; }
     }
+    /* 日本語タイトルを熟語単位で折り返す */
+    .title-jp {
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+      line-break: strict;
+    }
     /* PWA standalone (ホーム画面起動) でノッチ/ステータスバーを避ける */
     .safe-pad {
       padding-top: max(1rem, env(safe-area-inset-top));
@@ -1045,7 +1051,7 @@
               </div>
               <div className="flex-1">
                 <div className="flex items-start justify-between mb-2 gap-2">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <div className="flex-shrink-0">{getIcon()}</div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -1056,7 +1062,7 @@
                           </span>
                         )}
                       </div>
-                      <h3 className="font-bold text-lg text-gray-800 break-words leading-tight">{item.title}</h3>
+                      <h3 className="font-bold text-lg text-gray-800 leading-tight title-jp">{item.title}</h3>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
