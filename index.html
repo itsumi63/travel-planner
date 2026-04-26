@@ -609,6 +609,21 @@
       const [selectedQR, setSelectedQR] = useState(null);
       const [draggedIndex, setDraggedIndex] = useState(null);
       const [showAIImport, setShowAIImport] = useState(false);
+      const [isMobile, setIsMobile] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.matchMedia('(max-width: 767px)').matches;
+      });
+
+      useEffect(() => {
+        const mql = window.matchMedia('(max-width: 767px)');
+        const handler = (e) => setIsMobile(e.matches);
+        if (mql.addEventListener) mql.addEventListener('change', handler);
+        else mql.addListener(handler);
+        return () => {
+          if (mql.removeEventListener) mql.removeEventListener('change', handler);
+          else mql.removeListener(handler);
+        };
+      }, []);
 
       useEffect(() => {
         setItems(travel.items || []);
@@ -861,6 +876,7 @@
                 </svg>
                 AI入力
               </button>
+              {!isMobile && (
               <div className="relative group">
                 <button
                   onClick={handleClaudeImport}
@@ -880,6 +896,7 @@
                   <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
                 </div>
               </div>
+              )}
               <button
                 onClick={downloadExcel}
                 className="flex-none w-28 h-16 bg-green-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-green-700 transition flex flex-col items-center justify-center gap-1 whitespace-nowrap"
